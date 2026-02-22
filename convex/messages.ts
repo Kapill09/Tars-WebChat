@@ -53,8 +53,15 @@ export const getMessages = query({
                     }
                 }
 
+                // Resolve storage ID → serving URL so media (voice, image, file) can load
+                let fileUrl: string | null = message.fileUrl || null;
+                if (!fileUrl && message.fileStorageId) {
+                    fileUrl = await ctx.storage.getUrl(message.fileStorageId);
+                }
+
                 return {
                     ...message,
+                    fileUrl: fileUrl ?? undefined,
                     isMine: message.senderId === currentUser._id,
                     reactions,
                     senderDetails: {
