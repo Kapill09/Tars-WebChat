@@ -1,14 +1,30 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
 
-export default async function LandingPage() {
-  const session = await auth();
+export default function LandingPage() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
 
-  // Redirect signed-in users immediately to the chat application
-  if (session?.userId) {
-    redirect("/chat");
+  // If already signed in (client-side), redirect immediately.
+  // This covers the case where the server redirect races with client hydration on mobile.
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.replace("/chat");
+    }
+  }, [isLoaded, isSignedIn, router]);
+
+  // Show nothing while Clerk is loading or while we redirect
+  if (!isLoaded || isSignedIn) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-white">
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
