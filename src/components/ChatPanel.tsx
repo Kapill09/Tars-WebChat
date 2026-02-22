@@ -61,6 +61,20 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    // Create the audio element imperatively so the browser never tries to load
+    // a src-less <audio> tag (which causes NotSupportedError on mount).
+    useEffect(() => {
+        const audio = new Audio();
+        audio.onended = () => setPlayingAudioId(null);
+        audio.onpause = () => setPlayingAudioId(null);
+        audioRef.current = audio;
+        return () => {
+            audio.pause();
+            audio.src = "";
+            audioRef.current = null;
+        };
+    }, []);
+
     const handleToggleAudio = async (url: string, id: string) => {
         if (!audioRef.current) return;
 
@@ -68,18 +82,14 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
             audioRef.current.pause();
             setPlayingAudioId(null);
         } else {
-            // If switching from another playing audio, pause it first
-            if (playingAudioId) {
+            if (!audioRef.current.paused) {
                 audioRef.current.pause();
             }
-
             audioRef.current.src = url;
             try {
-                // Ensure the src is set before playing
                 await audioRef.current.play();
                 setPlayingAudioId(id);
             } catch (err: any) {
-                // Suppress AbortError as it's a known race condition with play/pause
                 if (err.name !== 'AbortError') {
                     console.error("Audio playback error:", err);
                 }
@@ -771,16 +781,7 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                     </div>
                 </div>
             </div>
-            <audio
-                ref={audioRef}
-                className="hidden"
-                onEnded={() => setPlayingAudioId(null)}
-                onPause={() => setPlayingAudioId(null)}
-                onPlay={() => {
-                    // This ensures the button icon stays in sync if triggered externally
-                    // though in our case it's mostly redundancy
-                }}
-            />
+            {/* Audio is created imperatively via useEffect — no JSX tag needed */}
         </div>
     );
 }
