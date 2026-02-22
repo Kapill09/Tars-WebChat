@@ -43,6 +43,13 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const deleteForMe = useMutation(api.messages.deleteForMe);
     const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
     const markAsDelivered = useMutation(api.messages.markAsDelivered);
+    const toggleMute = useMutation(api.conversations.toggleMute);
+    const clearChat = useMutation(api.conversations.clearChat);
+    const reportUser = useMutation(api.conversations.reportUser);
+    const toggleBlockUser = useMutation(api.users.toggleBlockUser);
+
+    const currentUser = useQuery(api.users.getCurrentUser);
+    const blockedUsers = useQuery(api.users.getBlockedUsers);
 
     const conversations = useQuery(api.conversations.listConversations);
     const conversation = conversations?.find((c) => c.id === conversationId);
@@ -62,6 +69,10 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const recordingStartRef = useRef<number | null>(null); // wall-clock ms when recording began
+
+    const [searchQuery, setSearchQuery] = useState("");
+    const [showSearch, setShowSearch] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Create the audio element imperatively so the browser never tries to load
     // a src-less <audio> tag (which causes NotSupportedError on mount).
@@ -109,6 +120,9 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const { theme } = useTheme();
+
+    const otherMember = !conversation?.isGroup ? members?.find(m => m._id !== currentUser?._id) : null;
+    const isBlocked = otherMember ? blockedUsers?.includes(otherMember._id) : false;
 
     const onlineMembers = members?.filter(m => m.isOnline) || [];
     const onlineCount = onlineMembers.length;
@@ -368,23 +382,60 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                 {conversation.isGroup ? "Group Info" : "View Contact"}
                             </Button>
 
-                            <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
+                            <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2" onClick={() => setShowSearch(true)}>
                                 <Search className="w-4 h-4" /> Search
                             </Button>
 
-                            <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
-                                <Bell className="w-4 h-4" /> Mute notifications
+                            <Button
+                                variant="ghost"
+                                className={`w-full justify-start text-xs h-9 gap-2 ${conversation.isMuted ? "text-blue-500" : ""}`}
+                                onClick={() => {
+                                    toggleMute({ conversationId });
+                                    toast.success(conversation.isMuted ? "Unmuted" : "Muted");
+                                }}
+                            >
+                                {conversation.isMuted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                                {conversation.isMuted ? "Unmute notifications" : "Mute notifications"}
                             </Button>
 
                             {!conversation.isGroup && (
                                 <>
-                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        className="w-full justify-start text-xs h-9 gap-2"
+                                        onClick={async () => {
+                                            if (confirm("Clear all messages for you? This cannot be undone.")) {
+                                                await clearChat({ conversationId });
+                                                toast.success("Chat cleared");
+                                            }
+                                        }}
+                                    >
                                         <Trash2 className="w-4 h-4" /> Clear chat
                                     </Button>
-                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2 text-red-500">
-                                        <Ban className="w-4 h-4" /> Block user
+                                    <Button
+                                        variant="ghost"
+                                        className={`w-full justify-start text-xs h-9 gap-2 ${isBlocked ? "text-green-500" : "text-red-500"}`}
+                                        onClick={async () => {
+                                            if (otherMember) {
+                                                await toggleBlockUser({ blockedUserId: otherMember._id });
+                                                toast.success(isBlocked ? "User unblocked" : "User blocked");
+                                            }
+                                        }}
+                                    >
+                                        {isBlocked ? <ShieldCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                                        {isBlocked ? "Unblock user" : "Block user"}
                                     </Button>
-                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2 text-amber-500">
+                                    <Button
+                                        variant="ghost"
+                                        className="w-full justify-start text-xs h-9 gap-2 text-amber-500"
+                                        onClick={() => {
+                                            const reason = prompt("Enter reason for report:");
+                                            if (reason && otherMember) {
+                                                reportUser({ reportedUserId: otherMember._id, conversationId, reason });
+                                                toast.success("User reported");
+                                            }
+                                        }}
+                                    >
                                         <Flag className="w-4 h-4" /> Report user
                                     </Button>
                                 </>
@@ -414,6 +465,30 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                 </div>
             </header>
 
+            {showSearch && (
+                <div className="px-6 py-2 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-b dark:border-gray-800 flex items-center gap-3 animate-in slide-in-from-top duration-300 z-10">
+                    <div className="flex-1 flex items-center gap-2 bg-gray-100 dark:bg-gray-900 px-3 py-1.5 rounded-xl border dark:border-gray-800 focus-within:border-blue-500/50 transition-all">
+                        <Search className="w-4 h-4 text-gray-400" />
+                        <Input
+                            ref={searchInputRef}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search in conversation..."
+                            className="h-7 text-xs bg-transparent border-none focus-visible:ring-0 p-0 shadow-none dark:text-gray-100"
+                            autoFocus
+                        />
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        onClick={() => { setShowSearch(false); setSearchQuery(""); }}
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            )}
+
             <div className="flex-1 flex overflow-hidden relative">
                 <div className={`flex-1 flex flex-col transition-all duration-300 ${showInfo ? "mr-0 md:mr-80" : "mr-0"}`}>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4" onScroll={handleScroll}>
@@ -422,7 +497,9 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                 Send a message to start the conversation!
                             </div>
                         ) : (
-                            messages?.map((msg) => {
+                            messages?.filter(msg =>
+                                !searchQuery || msg.content.toLowerCase().includes(searchQuery.toLowerCase())
+                            ).map((msg) => {
                                 const timeStr = format(new Date(msg._creationTime), "h:mm a");
                                 const reactions = msg.reactions || [];
                                 const groupedReactions = reactions.reduce((acc: any, r: any) => {
@@ -435,6 +512,20 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                 const deliveredTo = msg.deliveredTo || [];
                                 const isReadByAll = otherMembers.length > 0 && otherMembers.every(m => seenBy.includes(m._id));
                                 const isDeliveredByAll = otherMembers.length > 0 && otherMembers.every(m => deliveredTo.includes(m._id));
+
+                                const renderContent = (content: string) => {
+                                    if (!searchQuery) return content;
+                                    const parts = content.split(new RegExp(`(${searchQuery})`, 'gi'));
+                                    return (
+                                        <>
+                                            {parts.map((part, i) =>
+                                                part.toLowerCase() === searchQuery.toLowerCase()
+                                                    ? <mark key={i} className="bg-yellow-300 dark:bg-yellow-600 text-black px-0.5 rounded shadow-sm">{part}</mark>
+                                                    : part
+                                            )}
+                                        </>
+                                    );
+                                };
 
                                 return (
                                     <div
@@ -547,7 +638,7 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                     );
                                                 })()}
 
-                                                <p className="break-words leading-relaxed" style={{ fontSize: "15px" }}>{msg.content}</p>
+                                                <p className="break-words leading-relaxed" style={{ fontSize: "15px" }}>{renderContent(msg.content)}</p>
 
                                                 <div className={`flex items-center gap-2 mt-1 ${msg.isMine ? "justify-end" : "justify-start"}`}>
                                                     {msg.isEdited && (
@@ -741,9 +832,9 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                     <Input
                                         value={newMessage}
                                         onChange={handleInputChange}
-                                        placeholder={isRecording ? "Listening..." : "Type something amazing..."}
+                                        placeholder={isBlocked ? "You have blocked this user" : isRecording ? "Listening..." : "Type something amazing..."}
                                         className="flex-1 rounded-2xl bg-gray-100/50 dark:bg-gray-900/50 border-white/20 dark:border-gray-800 focus-visible:ring-blue-500/50 pb-3 pt-3 px-5 h-12 text-[15px] shadow-sm backdrop-blur-sm dark:text-gray-100 dark:placeholder:text-gray-600 transition-all group-focus-within:bg-white dark:group-focus-within:bg-black group-focus-within:shadow-md"
-                                        disabled={isRecording}
+                                        disabled={isRecording || isBlocked}
                                     />
                                 </div>
 
@@ -897,6 +988,6 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                 </div>
             </div>
             {/* Audio is created imperatively via useEffect — no JSX tag needed */}
-        </div>
+        </div >
     );
 }

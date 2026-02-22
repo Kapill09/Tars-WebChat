@@ -27,6 +27,8 @@ export default defineSchema({
         hasUnread: v.boolean(),
         unreadCount: v.optional(v.number()),
         lastRead: v.number(),
+        isMuted: v.optional(v.boolean()),
+        lastClearedAt: v.optional(v.number()),
     })
         .index("by_conversationId", ["conversationId"])
         .index("by_userId", ["userId"])
@@ -56,6 +58,21 @@ export default defineSchema({
         userId: v.id("users"),
         emoji: v.string(),
     }).index("by_messageId", ["messageId"]),
+
+    blockedUsers: defineTable({
+        blockerId: v.id("users"),
+        blockedId: v.id("users"),
+    })
+        .index("by_blockerId", ["blockerId"])
+        .index("by_blockerId_and_blockedId", ["blockerId", "blockedId"]),
+
+    reports: defineTable({
+        reporterId: v.id("users"),
+        reportedUserId: v.id("users"),
+        conversationId: v.id("conversations"),
+        reason: v.string(),
+        createdAt: v.number(),
+    }),
 
     typingIndicators: defineTable({
         conversationId: v.id("conversations"),

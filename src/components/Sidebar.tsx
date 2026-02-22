@@ -11,7 +11,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { Id } from "../../convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Hash } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hash, BellOff } from "lucide-react";
 import { Button } from "./ui/button";
 
 interface SidebarProps {
@@ -133,6 +133,7 @@ export function Sidebar({ onSelectConversation, selectedId }: SidebarProps) {
                                     <span className={`font-bold truncate pr-1 dark:text-white flex items-center gap-1`}>
                                         {c.isGroup && <Hash className="w-3.5 h-3.5 text-blue-500" />}
                                         {c.name}
+                                        {c.isMuted && <BellOff className="w-3 h-3 text-gray-400 ml-1" />}
                                     </span>
                                     <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 uppercase font-medium">
                                         {formatMessageTime(c.lastMessageTime)}
@@ -142,7 +143,7 @@ export function Sidebar({ onSelectConversation, selectedId }: SidebarProps) {
                                     <p className={`text-sm truncate pr-2 ${c.unreadCount > 0 ? "font-bold text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400"}`}>
                                         {c.lastMessage}
                                     </p>
-                                    {c.unreadCount > 0 && (
+                                    {c.unreadCount > 0 && !c.isMuted && (
                                         <span className="bg-blue-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1 animate-in zoom-in duration-300">
                                             {c.unreadCount}
                                         </span>

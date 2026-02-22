@@ -24,12 +24,28 @@ export const getMessages = query({
 
         if (!membership) return [];
 
+        const lastClearedAt = membership.lastClearedAt || 0;
+
+        // Fetch blocked users by current user
+        const blockedRecords = await ctx.db
+            .query("blockedUsers")
+            .withIndex("by_blockerId", (q) => q.eq("blockerId", currentUser._id))
+            .collect();
+        const blockedUserIds = new Set(blockedRecords.map(b => b.blockedId));
+
         const messages = await ctx.db
             .query("messages")
             .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
             .collect();
 
-        const filteredMessages = messages.filter(m => !(m.hiddenFor || []).includes(currentUser._id));
+        // 1. Filter by lastClearedAt (Clear Chat)
+        // 2. Filter by hiddenFor
+        // 3. Hide messages from blocked users
+        const filteredMessages = messages.filter(m =>
+            m._creationTime > lastClearedAt &&
+            !(m.hiddenFor || []).includes(currentUser._id) &&
+            !blockedUserIds.has(m.senderId)
+        );
 
         return Promise.all(
             filteredMessages.map(async (message) => {
@@ -101,6 +117,31 @@ export const sendMessage = mutation({
 
         if (!sender) throw new Error("User not found");
 
+        const conversation = await ctx.db.get(args.conversationId);
+        if (!conversation) throw new Error("Conversation not found");
+
+        // Check if blocked (for direct chats)
+        if (!conversation.isGroup) {
+            const members = await ctx.db
+                .query("conversationMembers")
+                .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+                .collect();
+
+            const otherMember = members.find(m => m.userId !== sender._id);
+            if (otherMember) {
+                const isBlocked = await ctx.db
+                    .query("blockedUsers")
+                    .withIndex("by_blockerId_and_blockedId", (q) =>
+                        q.eq("blockerId", otherMember.userId).eq("blockedId", sender._id)
+                    )
+                    .unique();
+
+                if (isBlocked) {
+                    throw new Error("You are blocked by this user");
+                }
+            }
+        }
+
         const messageId = await ctx.db.insert("messages", {
             conversationId: args.conversationId,
             senderId: sender._id,
@@ -131,10 +172,11 @@ export const sendMessage = mutation({
 
         for (const membership of memberships) {
             if (membership.userId !== sender._id) {
-                await ctx.db.patch(membership._id, {
-                    hasUnread: true,
-                    unreadCount: (membership.unreadCount || 0) + 1,
-                });
+                const updates: any = { hasUnread: true };
+                if (!membership.isMuted) {
+                    updates.unreadCount = (membership.unreadCount || 0) + 1;
+                }
+                await ctx.db.patch(membership._id, updates);
             } else {
                 await ctx.db.patch(membership._id, {
                     lastRead: Date.now(),

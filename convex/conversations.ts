@@ -166,6 +166,8 @@ export const listConversations = query({
                     hasUnread: membership.hasUnread,
                     unreadCount: membership.unreadCount || 0,
                     memberCount: otherMemberships.length,
+                    isMuted: membership.isMuted || false,
+                    lastClearedAt: membership.lastClearedAt || 0,
                 };
             })
         );
@@ -336,6 +338,100 @@ export const renameGroup = mutation({
     handler: async (ctx, args) => {
         await ctx.db.patch(args.conversationId, {
             name: args.name,
+        });
+    },
+});
+
+/**
+ * Toggle mute notifications for a conversation
+ */
+export const toggleMute = mutation({
+    args: { conversationId: v.id("conversations") },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Unauthenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!user) throw new Error("User not found");
+
+        const membership = await ctx.db
+            .query("conversationMembers")
+            .withIndex("by_conversationId_and_userId", (q) =>
+                q.eq("conversationId", args.conversationId).eq("userId", user._id)
+            )
+            .unique();
+
+        if (membership) {
+            await ctx.db.patch(membership._id, {
+                isMuted: !membership.isMuted,
+            });
+            return !membership.isMuted;
+        }
+        return false;
+    },
+});
+
+/**
+ * Clear chat messages for the current user
+ */
+export const clearChat = mutation({
+    args: { conversationId: v.id("conversations") },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Unauthenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!user) throw new Error("User not found");
+
+        const membership = await ctx.db
+            .query("conversationMembers")
+            .withIndex("by_conversationId_and_userId", (q) =>
+                q.eq("conversationId", args.conversationId).eq("userId", user._id)
+            )
+            .unique();
+
+        if (membership) {
+            await ctx.db.patch(membership._id, {
+                lastClearedAt: Date.now(),
+            });
+        }
+    },
+});
+
+/**
+ * Report a user or group
+ */
+export const reportUser = mutation({
+    args: {
+        reportedUserId: v.id("users"),
+        conversationId: v.id("conversations"),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Unauthenticated");
+
+        const reporter = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!reporter) throw new Error("User not found");
+
+        await ctx.db.insert("reports", {
+            reporterId: reporter._id,
+            reportedUserId: args.reportedUserId,
+            conversationId: args.conversationId,
+            reason: args.reason,
+            createdAt: Date.now(),
         });
     },
 });

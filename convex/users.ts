@@ -129,6 +129,67 @@ export const updateProfile = mutation({
 });
 
 /**
+ * Toggle block user
+ */
+export const toggleBlockUser = mutation({
+    args: { blockedUserId: v.id("users") },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Unauthenticated");
+
+        const blocker = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!blocker) throw new Error("User not found");
+
+        const existingBlock = await ctx.db
+            .query("blockedUsers")
+            .withIndex("by_blockerId_and_blockedId", (q) =>
+                q.eq("blockerId", blocker._id).eq("blockedId", args.blockedUserId)
+            )
+            .unique();
+
+        if (existingBlock) {
+            await ctx.db.delete(existingBlock._id);
+            return false; // Unblocked
+        } else {
+            await ctx.db.insert("blockedUsers", {
+                blockerId: blocker._id,
+                blockedId: args.blockedUserId,
+            });
+            return true; // Blocked
+        }
+    },
+});
+
+/**
+ * Get list of blocked user IDs
+ */
+export const getBlockedUsers = query({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return [];
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!user) return [];
+
+        const blocks = await ctx.db
+            .query("blockedUsers")
+            .withIndex("by_blockerId", (q) => q.eq("blockerId", user._id))
+            .collect();
+
+        return blocks.map(b => b.blockedId);
+    },
+});
+
+/**
  * Get current user
  */
 export const getCurrentUser = query({
