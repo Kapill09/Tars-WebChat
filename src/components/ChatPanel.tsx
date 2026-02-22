@@ -6,7 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Trash2, Smile, Reply, X, Users, MoreVertical, List, UserPlus, LogOut, Settings2, ShieldCheck, Clock, Paperclip, Mic, StopCircle, Play, Pause, FileIcon, Check, CheckCheck, Pencil, UserMinus, Globe } from "lucide-react";
+import { ArrowLeft, Send, Trash2, Smile, Reply, X, Users, MoreVertical, List, UserPlus, LogOut, Settings2, ShieldCheck, Clock, Paperclip, Mic, StopCircle, Play, Pause, FileIcon, Check, CheckCheck, Pencil, UserMinus, Globe, Search, User, Bell, Ban, Flag, BellOff } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -362,23 +362,52 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                 <MoreVertical className="w-5 h-5" />
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent align="end" className="w-48 p-1 dark:bg-[#1a1a1a] dark:border-gray-800">
+                        <PopoverContent align="end" className="w-52 p-1 dark:bg-[#1a1a1a] dark:border-gray-800">
                             <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2" onClick={() => setShowInfo(true)}>
-                                <List className="w-4 h-4" /> Group Info
+                                {conversation.isGroup ? <List className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                                {conversation.isGroup ? "Group Info" : "View Contact"}
                             </Button>
+
+                            <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
+                                <Search className="w-4 h-4" /> Search
+                            </Button>
+
+                            <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
+                                <Bell className="w-4 h-4" /> Mute notifications
+                            </Button>
+
+                            {!conversation.isGroup && (
+                                <>
+                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2">
+                                        <Trash2 className="w-4 h-4" /> Clear chat
+                                    </Button>
+                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2 text-red-500">
+                                        <Ban className="w-4 h-4" /> Block user
+                                    </Button>
+                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2 text-amber-500">
+                                        <Flag className="w-4 h-4" /> Report user
+                                    </Button>
+                                </>
+                            )}
+
                             {conversation.isGroup && (
-                                <Button
-                                    variant="ghost"
-                                    className="w-full justify-start text-xs h-9 gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
-                                    onClick={() => {
-                                        if (confirm("Leave this group?")) {
-                                            leaveGroup({ conversationId });
-                                            onBack();
-                                        }
-                                    }}
-                                >
-                                    <LogOut className="w-4 h-4" /> Leave Group
-                                </Button>
+                                <>
+                                    <Button variant="ghost" className="w-full justify-start text-xs h-9 gap-2 text-amber-500">
+                                        <Flag className="w-4 h-4" /> Report group
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="w-full justify-start text-xs h-9 gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
+                                        onClick={() => {
+                                            if (confirm("Leave this group?")) {
+                                                leaveGroup({ conversationId });
+                                                onBack();
+                                            }
+                                        }}
+                                    >
+                                        <LogOut className="w-4 h-4" /> Leave Group
+                                    </Button>
+                                </>
                             )}
                         </PopoverContent>
                     </Popover>
@@ -744,12 +773,11 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                     </footer>
                 </div>
 
-                {/* Group Info Sidebar */}
                 <div className={`absolute top-0 right-0 bottom-0 w-full md:w-80 bg-white dark:bg-[#111] border-l dark:border-gray-800 z-30 transition-transform duration-300 shadow-xl overflow-y-auto ${showInfo ? "translate-x-0" : "translate-x-full"}`}>
                     <div className="p-4 border-b dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a] flex items-center justify-between sticky top-0 z-10">
                         <h3 className="font-bold dark:text-gray-100 flex items-center gap-2">
-                            <Settings2 className="w-4 h-4 text-gray-400" />
-                            Group Info
+                            {conversation.isGroup ? <Settings2 className="w-4 h-4 text-gray-400" /> : <User className="w-4 h-4 text-gray-400" />}
+                            {conversation.isGroup ? "Group Info" : "Contact Info"}
                         </h3>
                         <Button variant="ghost" size="icon" onClick={() => setShowInfo(false)} className="h-8 w-8 rounded-full">
                             <X className="w-4 h-4" />
@@ -757,101 +785,115 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                     </div>
 
                     <div className="p-6 flex flex-col items-center border-b dark:border-gray-800 bg-gradient-to-b from-gray-50/50 to-transparent dark:from-white/5">
-                        <div className={`w-28 h-28 rounded-3xl shadow-2xl border-4 border-white dark:border-gray-700 overflow-hidden mb-4 flex items-center justify-center text-white text-4xl font-black ${conversation.isGroup ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gray-200"}`}>
-                            {conversation.isGroup ? conversation.name.substring(0, 1).toUpperCase() : "?"}
+                        <div className={`w-28 h-28 rounded-3xl shadow-2xl border-4 border-white dark:border-gray-700 overflow-hidden mb-4 flex items-center justify-center text-white text-4xl font-black ${conversation.isGroup ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gray-100"}`}>
+                            {conversation.isGroup ? (
+                                conversation.name.substring(0, 1).toUpperCase()
+                            ) : (
+                                <img src={conversation.imageUrl || "https://github.com/shadcn.png"} alt="avatar" className="w-full h-full object-cover" />
+                            )}
                         </div>
                         <h2 className="text-xl font-black dark:text-white text-center flex items-center gap-2">
                             {conversation.name}
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-40 hover:opacity-100" onClick={() => {
-                                const newName = prompt("New group name:", conversation.name);
-                                if (newName) renameGroup({ conversationId, name: newName });
-                            }}>
-                                <Settings2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {conversation.isGroup && (
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-40 hover:opacity-100" onClick={() => {
+                                    const newName = prompt("New group name:", conversation.name);
+                                    if (newName) renameGroup({ conversationId, name: newName });
+                                }}>
+                                    <Settings2 className="w-3.5 h-3.5" />
+                                </Button>
+                            )}
                         </h2>
-                        <p className="text-xs text-blue-500 font-bold mt-1 uppercase tracking-widest">{conversation.memberCount} Members • {onlineCount} Online</p>
+                        {conversation.isGroup ? (
+                            <p className="text-xs text-blue-500 font-bold mt-1 uppercase tracking-widest">{conversation.memberCount} Members • {onlineCount} Online</p>
+                        ) : (
+                            <span className={`text-[11px] font-bold mt-1 uppercase tracking-widest ${conversation.isOnline ? "text-green-500" : "text-gray-400"}`}>
+                                {conversation.isOnline ? "Active Now" : "Offline"}
+                            </span>
+                        )}
                     </div>
 
-                    <div className="p-4 space-y-6">
-                        <div>
-                            <div className="flex items-center justify-between mb-4 px-1">
-                                <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Users className="w-3.5 h-3.5" />
-                                    Members list
-                                </h4>
-                                <AddMemberDialog
-                                    conversationId={conversationId}
-                                    currentMemberIds={members?.map(m => m._id as Id<"users">) || []}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                {members?.map(m => (
-                                    <div key={m._id} className="flex items-center justify-between p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-all group/member">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="relative shrink-0">
-                                                <Avatar className="h-9 w-9 border dark:border-gray-800 shadow-sm">
-                                                    <AvatarImage src={m.imageUrl} />
-                                                    <AvatarFallback className="text-xs">{m.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                                </Avatar>
-                                                {m.isOnline && (
-                                                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#111] rounded-full" />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold dark:text-gray-100 truncate flex items-center gap-1.5">
-                                                    {m.name}
-                                                    {m.isAdmin && <ShieldCheck className="w-3 h-3 text-amber-500" />}
-                                                </p>
-                                                <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                                                    {m.isOnline ? (
-                                                        <span className="text-green-500 font-bold">Online</span>
-                                                    ) : (
-                                                        <>
-                                                            <Clock className="w-2.5 h-2.5" />
-                                                            {m.lastSeen ? `Seen ${formatDistanceToNow(m.lastSeen)} ago` : 'Offline'}
-                                                        </>
+                    {conversation.isGroup && (
+                        <div className="p-4 space-y-6">
+                            <div>
+                                <div className="flex items-center justify-between mb-4 px-1">
+                                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Users className="w-3.5 h-3.5" />
+                                        Members list
+                                    </h4>
+                                    <AddMemberDialog
+                                        conversationId={conversationId}
+                                        currentMemberIds={members?.map(m => m._id as Id<"users">) || []}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    {members?.map(m => (
+                                        <div key={m._id} className="flex items-center justify-between p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-all group/member">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="relative shrink-0">
+                                                    <Avatar className="h-9 w-9 border dark:border-gray-800 shadow-sm">
+                                                        <AvatarImage src={m.imageUrl} />
+                                                        <AvatarFallback className="text-xs">{m.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                                    </Avatar>
+                                                    {m.isOnline && (
+                                                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#111] rounded-full" />
                                                     )}
                                                 </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold dark:text-gray-100 truncate flex items-center gap-1.5">
+                                                        {m.name}
+                                                        {m.isAdmin && <ShieldCheck className="w-3 h-3 text-amber-500" />}
+                                                    </p>
+                                                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                        {m.isOnline ? (
+                                                            <span className="text-green-500 font-bold">Online</span>
+                                                        ) : (
+                                                            <>
+                                                                <Clock className="w-2.5 h-2.5" />
+                                                                {m.lastSeen ? `Seen ${formatDistanceToNow(m.lastSeen)} ago` : 'Offline'}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
+                                            {m.clerkId !== userId && members?.find(me => me.clerkId === userId)?.isAdmin && (
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover/member:opacity-100 transition-opacity">
+                                                            <MoreVertical className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-32 p-1 dark:bg-[#1a1a1a] dark:border-gray-800">
+                                                        <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] text-red-500 h-8 font-bold" onClick={() => {
+                                                            if (confirm(`Remove ${m.name} from group?`)) {
+                                                                removeMember({ conversationId, userId: m._id as Id<"users"> });
+                                                            }
+                                                        }}>
+                                                            <UserMinus className="w-3.5 h-3.5 mr-2" /> Remove
+                                                        </Button>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            )}
                                         </div>
-                                        {m.clerkId !== userId && members?.find(me => me.clerkId === userId)?.isAdmin && (
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover/member:opacity-100 transition-opacity">
-                                                        <MoreVertical className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-32 p-1 dark:bg-[#1a1a1a] dark:border-gray-800">
-                                                    <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] text-red-500 h-8 font-bold" onClick={() => {
-                                                        if (confirm(`Remove ${m.name} from group?`)) {
-                                                            removeMember({ conversationId, userId: m._id as Id<"users"> });
-                                                        }
-                                                    }}>
-                                                        <UserMinus className="w-3.5 h-3.5 mr-2" /> Remove
-                                                    </Button>
-                                                </PopoverContent>
-                                            </Popover>
-                                        )}
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t dark:border-gray-800">
+                                <Button
+                                    variant="ghost"
+                                    className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold text-sm h-12 rounded-xl"
+                                    onClick={() => {
+                                        if (confirm("Leave this group?")) {
+                                            leaveGroup({ conversationId });
+                                            onBack();
+                                        }
+                                    }}
+                                >
+                                    <LogOut className="w-5 h-5" /> Leave Group
+                                </Button>
                             </div>
                         </div>
-
-                        <div className="pt-4 border-t dark:border-gray-800">
-                            <Button
-                                variant="ghost"
-                                className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold text-sm h-12 rounded-xl"
-                                onClick={() => {
-                                    if (confirm("Leave this group?")) {
-                                        leaveGroup({ conversationId });
-                                        onBack();
-                                    }
-                                }}
-                            >
-                                <LogOut className="w-5 h-5" /> Leave Group
-                            </Button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
             {/* Audio is created imperatively via useEffect — no JSX tag needed */}
