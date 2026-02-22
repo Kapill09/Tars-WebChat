@@ -207,6 +207,13 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
 
     const startRecording = async () => {
         try {
+            // navigator.mediaDevices is only available in secure contexts (HTTPS or localhost).
+            // Accessing via http:// on a mobile device (e.g., local dev IP) will make it undefined.
+            if (!navigator.mediaDevices?.getUserMedia) {
+                toast.error("Microphone access requires HTTPS. Please open the app at https:// or via localhost.");
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             // Detect the best supported MIME type for this browser
@@ -475,8 +482,8 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                             {/* Play / Pause button */}
                                                             <button
                                                                 className={`shrink-0 p-2 rounded-full transition-colors ${msg.isMine
-                                                                        ? "bg-white/25 hover:bg-white/40"
-                                                                        : "bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200"
+                                                                    ? "bg-white/25 hover:bg-white/40"
+                                                                    : "bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200"
                                                                     }`}
                                                                 onClick={() => handleToggleAudio(msg.fileUrl!, msg._id)}
                                                             >
