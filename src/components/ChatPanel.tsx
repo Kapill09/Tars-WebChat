@@ -198,31 +198,51 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+
+            // Detect the best supported MIME type for this browser
+            const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                ? "audio/webm;codecs=opus"
+                : MediaRecorder.isTypeSupported("audio/webm")
+                    ? "audio/webm"
+                    : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+                        ? "audio/ogg;codecs=opus"
+                        : "audio/ogg";
+
+            const recorder = new MediaRecorder(stream, { mimeType });
             const chunks: BlobPart[] = [];
 
-            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
             recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: "audio/webm" });
+                const blob = new Blob(chunks, { type: mimeType });
                 setAudioBlob(blob);
 
-                // Auto upload voice note
-                const postUrl = await generateUploadUrl();
-                const result = await fetch(postUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "audio/webm" },
-                    body: blob,
-                });
-                const { storageId } = await result.json();
+                // Derive a clean base type (strip codec params) for the Content-Type header
+                const baseType = mimeType.split(";")[0]; // e.g. "audio/webm"
+                const ext = baseType === "audio/ogg" ? "ogg" : "webm";
 
-                await sendMessage({
-                    conversationId,
-                    content: "Voice message",
-                    fileStorageId: storageId,
-                    fileName: "VoiceNote.webm",
-                    fileSize: blob.size,
-                    fileType: "voice",
-                });
+                try {
+                    const postUrl = await generateUploadUrl();
+                    const result = await fetch(postUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": baseType },
+                        body: blob,
+                    });
+                    const { storageId } = await result.json();
+
+                    await sendMessage({
+                        conversationId,
+                        content: "Voice message",
+                        fileStorageId: storageId,
+                        fileName: `VoiceNote.${ext}`,
+                        fileSize: blob.size,
+                        fileType: "voice",
+                        // Store the exact MIME type so the player can set <source type>
+                        voiceMimeType: baseType,
+                    });
+                } catch (uploadErr) {
+                    console.error("Voice upload failed", uploadErr);
+                    toast.error("Voice upload failed");
+                }
                 setAudioBlob(null);
             };
 
@@ -429,19 +449,21 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                 )}
 
                                                 {!msg.isDeleted && msg.fileType === "voice" && (
-                                                    <div className={`flex items-center gap-3 mb-2 px-1 min-w-[200px]`}>
-                                                        <button
-                                                            className={`p-2 rounded-full ${msg.isMine ? "bg-white/20 hover:bg-white/30" : "bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200"} transition-colors`}
-                                                            onClick={() => handleToggleAudio(msg.fileUrl!, msg._id)}
+                                                    <div className={`flex flex-col gap-1 mb-2 min-w-[220px]`}>
+                                                        <audio
+                                                            controls
+                                                            controlsList="nodownload"
+                                                            className={`w-full h-9 rounded-lg ${msg.isMine
+                                                                    ? "[&::-webkit-media-controls-panel]:bg-blue-700 [&::-webkit-media-controls-current-time-display]:text-white [&::-webkit-media-controls-time-remaining-display]:text-white"
+                                                                    : ""
+                                                                }`}
                                                         >
-                                                            {playingAudioId === msg._id ? (
-                                                                <Pause className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />
-                                                            ) : (
-                                                                <Play className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />
-                                                            )}
-                                                        </button>
-                                                        <div className="flex-1 h-1 bg-current opacity-20 rounded-full" />
-                                                        <Mic className={`w-3 h-3 ${msg.isMine ? "text-blue-200" : "text-gray-400"}`} />
+                                                            <source
+                                                                src={msg.fileUrl!}
+                                                                type={(msg as any).voiceMimeType || "audio/webm"}
+                                                            />
+                                                            Your browser does not support audio playback.
+                                                        </audio>
                                                     </div>
                                                 )}
 

@@ -44,6 +44,7 @@ export default defineSchema({
         fileName: v.optional(v.string()),
         fileSize: v.optional(v.number()),
         fileType: v.optional(v.string()), // 'image', 'file', 'voice'
+        voiceMimeType: v.optional(v.string()), // e.g. 'audio/webm' or 'audio/ogg'
         seenBy: v.optional(v.array(v.id("users"))),
         deliveredTo: v.optional(v.array(v.id("users"))),
         hiddenFor: v.optional(v.array(v.id("users"))),
