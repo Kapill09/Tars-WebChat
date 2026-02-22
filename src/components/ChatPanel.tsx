@@ -58,15 +58,18 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const [isRecording, setIsRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+    const [playbackTime, setPlaybackTime] = useState(0); // current playback position in seconds
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const recordingStartRef = useRef<number | null>(null); // wall-clock ms when recording began
 
     // Create the audio element imperatively so the browser never tries to load
     // a src-less <audio> tag (which causes NotSupportedError on mount).
     useEffect(() => {
         const audio = new Audio();
-        audio.onended = () => setPlayingAudioId(null);
+        audio.onended = () => { setPlayingAudioId(null); setPlaybackTime(0); };
         audio.onpause = () => setPlayingAudioId(null);
+        audio.ontimeupdate = () => setPlaybackTime(audio.currentTime);
         audioRef.current = audio;
         return () => {
             audio.pause();
@@ -74,6 +77,13 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
             audioRef.current = null;
         };
     }, []);
+
+    /** Format seconds → M:SS */
+    const formatTime = (secs: number) => {
+        const m = Math.floor(secs / 60);
+        const s = Math.floor(secs % 60);
+        return `${m}:${s.toString().padStart(2, "0")}`;
+    };
 
     const handleToggleAudio = async (url: string, id: string) => {
         if (!audioRef.current) return;
@@ -213,11 +223,16 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
 
             recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
             recorder.onstop = async () => {
+                // Calculate duration from wall clock — WebM container lacks this metadata
+                const durationSecs = recordingStartRef.current
+                    ? (Date.now() - recordingStartRef.current) / 1000
+                    : 0;
+                recordingStartRef.current = null;
+
                 const blob = new Blob(chunks, { type: mimeType });
                 setAudioBlob(blob);
 
-                // Derive a clean base type (strip codec params) for the Content-Type header
-                const baseType = mimeType.split(";")[0]; // e.g. "audio/webm"
+                const baseType = mimeType.split(";")[0];
                 const ext = baseType === "audio/ogg" ? "ogg" : "webm";
 
                 try {
@@ -236,8 +251,8 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                         fileName: `VoiceNote.${ext}`,
                         fileSize: blob.size,
                         fileType: "voice",
-                        // Store the exact MIME type so the player can set <source type>
                         voiceMimeType: baseType,
+                        voiceDuration: Math.round(durationSecs),
                     });
                 } catch (uploadErr) {
                     console.error("Voice upload failed", uploadErr);
@@ -247,6 +262,7 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
             };
 
             recorder.start();
+            recordingStartRef.current = Date.now(); // start the wall clock
             mediaRecorderRef.current = recorder;
             setIsRecording(true);
         } catch (err) {
@@ -448,24 +464,52 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                     </div>
                                                 )}
 
-                                                {!msg.isDeleted && msg.fileType === "voice" && (
-                                                    <div className={`flex flex-col gap-1 mb-2 min-w-[220px]`}>
-                                                        <audio
-                                                            controls
-                                                            controlsList="nodownload"
-                                                            className={`w-full h-9 rounded-lg ${msg.isMine
-                                                                    ? "[&::-webkit-media-controls-panel]:bg-blue-700 [&::-webkit-media-controls-current-time-display]:text-white [&::-webkit-media-controls-time-remaining-display]:text-white"
-                                                                    : ""
-                                                                }`}
-                                                        >
-                                                            <source
-                                                                src={msg.fileUrl!}
-                                                                type={(msg as any).voiceMimeType || "audio/webm"}
-                                                            />
-                                                            Your browser does not support audio playback.
-                                                        </audio>
-                                                    </div>
-                                                )}
+                                                {!msg.isDeleted && msg.fileType === "voice" && (() => {
+                                                    const isPlaying = playingAudioId === msg._id;
+                                                    const totalSecs = (msg as any).voiceDuration || 0;
+                                                    const elapsed = isPlaying ? playbackTime : 0;
+                                                    const progressPct = totalSecs > 0 ? Math.min((elapsed / totalSecs) * 100, 100) : 0;
+
+                                                    return (
+                                                        <div className={`flex items-center gap-2.5 mb-2 min-w-[220px] px-1`}>
+                                                            {/* Play / Pause button */}
+                                                            <button
+                                                                className={`shrink-0 p-2 rounded-full transition-colors ${msg.isMine
+                                                                        ? "bg-white/25 hover:bg-white/40"
+                                                                        : "bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200"
+                                                                    }`}
+                                                                onClick={() => handleToggleAudio(msg.fileUrl!, msg._id)}
+                                                            >
+                                                                {isPlaying
+                                                                    ? <Pause className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />
+                                                                    : <Play className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />}
+                                                            </button>
+
+                                                            {/* Progress track + time */}
+                                                            <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                                                {/* Waveform / progress bar */}
+                                                                <div
+                                                                    className={`w-full h-1.5 rounded-full overflow-hidden ${msg.isMine ? "bg-white/25" : "bg-gray-300 dark:bg-gray-700"
+                                                                        }`}
+                                                                >
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all duration-200 ${msg.isMine ? "bg-white" : "bg-blue-500"
+                                                                            }`}
+                                                                        style={{ width: `${progressPct}%` }}
+                                                                    />
+                                                                </div>
+                                                                {/* Time */}
+                                                                <div className={`flex justify-between text-[10px] font-mono ${msg.isMine ? "text-blue-100/70" : "text-gray-500"
+                                                                    }`}>
+                                                                    <span>{formatTime(elapsed)}</span>
+                                                                    <span>{totalSecs > 0 ? formatTime(totalSecs) : "--:--"}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <Mic className={`shrink-0 w-3 h-3 ${msg.isMine ? "text-blue-200" : "text-gray-400"}`} />
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 <p className="break-words leading-relaxed" style={{ fontSize: "15px" }}>{msg.content}</p>
 

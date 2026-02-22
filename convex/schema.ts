@@ -45,6 +45,7 @@ export default defineSchema({
         fileSize: v.optional(v.number()),
         fileType: v.optional(v.string()), // 'image', 'file', 'voice'
         voiceMimeType: v.optional(v.string()), // e.g. 'audio/webm' or 'audio/ogg'
+        voiceDuration: v.optional(v.number()), // duration in seconds, captured at record time
         seenBy: v.optional(v.array(v.id("users"))),
         deliveredTo: v.optional(v.array(v.id("users"))),
         hiddenFor: v.optional(v.array(v.id("users"))),

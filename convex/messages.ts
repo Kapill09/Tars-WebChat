@@ -81,6 +81,7 @@ export const sendMessage = mutation({
         fileSize: v.optional(v.number()),
         fileType: v.optional(v.string()),
         voiceMimeType: v.optional(v.string()),
+        voiceDuration: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
@@ -105,6 +106,7 @@ export const sendMessage = mutation({
             fileSize: args.fileSize,
             fileType: args.fileType,
             voiceMimeType: args.voiceMimeType,
+            voiceDuration: args.voiceDuration,
             seenBy: [sender._id],
             deliveredTo: [sender._id],
             hiddenFor: [],
