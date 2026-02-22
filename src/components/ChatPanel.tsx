@@ -59,6 +59,33 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    const handleToggleAudio = async (url: string, id: string) => {
+        if (!audioRef.current) return;
+
+        if (playingAudioId === id) {
+            audioRef.current.pause();
+            setPlayingAudioId(null);
+        } else {
+            // If switching from another playing audio, pause it first
+            if (playingAudioId) {
+                audioRef.current.pause();
+            }
+
+            audioRef.current.src = url;
+            try {
+                // Ensure the src is set before playing
+                await audioRef.current.play();
+                setPlayingAudioId(id);
+            } catch (err: any) {
+                // Suppress AbortError as it's a known race condition with play/pause
+                if (err.name !== 'AbortError') {
+                    console.error("Audio playback error:", err);
+                }
+            }
+        }
+    };
     const fileInputRef = useRef<HTMLInputElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const { theme } = useTheme();
@@ -395,20 +422,7 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                     <div className={`flex items-center gap-3 mb-2 px-1 min-w-[200px]`}>
                                                         <button
                                                             className={`p-2 rounded-full ${msg.isMine ? "bg-white/20 hover:bg-white/30" : "bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200"} transition-colors`}
-                                                            onClick={async (e) => {
-                                                                const audio = e.currentTarget.nextElementSibling as HTMLAudioElement;
-                                                                try {
-                                                                    if (audio.paused) {
-                                                                        await audio.play();
-                                                                        setPlayingAudioId(msg._id);
-                                                                    } else {
-                                                                        audio.pause();
-                                                                        setPlayingAudioId(null);
-                                                                    }
-                                                                } catch (err) {
-                                                                    console.error("Audio playback error:", err);
-                                                                }
-                                                            }}
+                                                            onClick={() => handleToggleAudio(msg.fileUrl!, msg._id)}
                                                         >
                                                             {playingAudioId === msg._id ? (
                                                                 <Pause className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />
@@ -416,13 +430,6 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                                 <Play className={`w-4 h-4 ${msg.isMine ? "text-white" : "text-blue-600"}`} />
                                                             )}
                                                         </button>
-                                                        <audio
-                                                            src={msg.fileUrl}
-                                                            className="hidden"
-                                                            onEnded={() => setPlayingAudioId(null)}
-                                                            onPause={() => setPlayingAudioId(null)}
-                                                            onPlay={() => setPlayingAudioId(msg._id)}
-                                                        />
                                                         <div className="flex-1 h-1 bg-current opacity-20 rounded-full" />
                                                         <Mic className={`w-3 h-3 ${msg.isMine ? "text-blue-200" : "text-gray-400"}`} />
                                                     </div>
@@ -764,6 +771,16 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                     </div>
                 </div>
             </div>
+            <audio
+                ref={audioRef}
+                className="hidden"
+                onEnded={() => setPlayingAudioId(null)}
+                onPause={() => setPlayingAudioId(null)}
+                onPlay={() => {
+                    // This ensures the button icon stays in sync if triggered externally
+                    // though in our case it's mostly redundancy
+                }}
+            />
         </div>
     );
 }
