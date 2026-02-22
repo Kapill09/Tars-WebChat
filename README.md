@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tars Web Chat
 
-## Getting Started
+A modern, production-ready real-time chat web application built with Next.js 14+ (App Router), Convex, Clerk, and Tailwind CSS.
 
-First, run the development server:
+## Features
 
+- **Authentication**: Clerk (email + social login).
+- **User Directory**: List all users except current user, real-time search.
+- **Real-Time Messaging**: 1-on-1 private messaging, real-time updates via Convex.
+- **Modern Message UI**: Clean chat bubbles, date-time formatting for today, older, and last year.
+- **Empty & Loading States**: Skeletons for UI components.
+- **Responsive Design**: Mobile-friendly conversation list and full-screen chat. Desktop sidebar layout.
+- **Delete Messages**: Soft delete functionality for your own messages.
+- **Unread Messages**: Badge count and auto-clearing logic on open.
+- **Smart Auto Scroll**: Automatically jumps to the newest message, scroll to read history without snapping.
+
+## Architecture Decisions
+
+1. **Frontend**: Next.js 14+ with App Router for server-safe, modern fetching patterns.
+2. **Database & Realtime Backend**: Convex replaces standard REST + Postgres. It offers automatic websocket subscriptions where components instantly re-render on data modification without needing manual WebSockets.
+3. **Auth**: Clerk integration automatically issues identity tokens which Convex maps natively into database permissions.
+4. **Styling**: Tailwind CSS + Shadcn/ui for headless accessible components wrapped in standard styling tags.
+
+## Setup Instructions
+
+### 1. Prerequisites
+- Node.js (v18+)
+- npm or yarn
+
+### 2. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Setup Environment Variables
+Create a `.env.local` file with the following variables:
+```
+NEXT_PUBLIC_CONVEX_URL=your_convex_url
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+CLERK_SECRET_KEY=your_clerk_secret_key
+CLERK_ISSUER_URL=your_clerk_issuer_url
+CLERK_WEBHOOK_SECRET=your_clerk_webhook_secret
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Setup Convex
+Initialize Convex backend:
+```bash
+npx convex dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Start Development Server
+```bash
+npm run dev
+```
 
-## Learn More
+Navigate to `http://localhost:3000` to preview the app.
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment Steps
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push your repository to GitHub.
+2. Connect the repository to Vercel.
+3. Set the build command to `npm run build` and install command to `npm install`.
+4. Ensure all environment variables listed in `.env.local` are copied over to Vercel Environment Variables.
+5. Provide your *Production Convex Deployment URL* to your Production Vercel App environment.
+6. Deploy!
