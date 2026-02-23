@@ -19,6 +19,7 @@ export default defineSchema({
         lastMessageId: v.optional(v.id("messages")),
         lastMessageTime: v.optional(v.number()),
         creatorId: v.optional(v.id("users")),
+        pinnedMessageIds: v.optional(v.array(v.id("messages"))),
     }),
 
     conversationMembers: defineTable({

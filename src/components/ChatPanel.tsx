@@ -7,7 +7,7 @@ import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Send, Trash2, Smile, Reply, X, Users, MoreVertical, List, UserPlus, LogOut, Settings2, ShieldCheck, Clock, Paperclip, Mic, StopCircle, Play, Pause, FileIcon, Check, CheckCheck, Pencil, UserMinus, Globe, Search, User, Bell, Ban, Flag, BellOff } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, isToday } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -47,9 +47,12 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const clearChat = useMutation(api.conversations.clearChat);
     const reportUser = useMutation(api.conversations.reportUser);
     const toggleBlockUser = useMutation(api.users.toggleBlockUser);
+    const togglePinMessage = useMutation(api.conversations.togglePinMessage);
 
     const currentUser = useQuery(api.users.getCurrentUser);
     const blockedUsers = useQuery(api.users.getBlockedUsers);
+    const pinnedMessages = useQuery(api.conversations.getPinnedMessages, { conversationId });
+    const sharedAssets = useQuery(api.conversations.getSharedAssets, { conversationId });
 
     const conversations = useQuery(api.conversations.listConversations);
     const conversation = conversations?.find((c) => c.id === conversationId);
@@ -73,6 +76,7 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [infoTab, setInfoTab] = useState<'members' | 'media' | 'files'>('members');
 
     // Create the audio element imperatively so the browser never tries to load
     // a src-less <audio> tag (which causes NotSupportedError on mount).
@@ -126,6 +130,12 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
 
     const onlineMembers = members?.filter(m => m.isOnline) || [];
     const onlineCount = onlineMembers.length;
+
+    const formatLastSeen = (timestamp: number) => {
+        const date = new Date(timestamp);
+        if (isToday(date)) return `Last seen today at ${format(date, "h:mm a")}`;
+        return `Last seen ${formatDistanceToNow(date, { addSuffix: true })}`;
+    };
 
     const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙌"];
 
@@ -358,12 +368,12 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                     <span>{conversation.memberCount} members • {onlineCount} online</span>
                                 </button>
                             ) : (
-                                <span className={`text-[11px] font-semibold px-2 rounded-full ${conversation.isOnline
-                                    ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-                                    : "text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800"
-                                    }`}>
-                                    {conversation.isOnline ? "Active Now" : "Currently Offline"}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${conversation.isOnline ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-gray-400"}`} />
+                                    <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                                        {conversation.isOnline ? "Online" : otherMember?.lastSeen ? formatLastSeen(otherMember.lastSeen) : "Offline"}
+                                    </span>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -465,6 +475,28 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                 </div>
             </header>
 
+            {pinnedMessages && pinnedMessages.length > 0 && (
+                <div className="px-6 py-2 bg-white/50 dark:bg-black/50 border-b dark:border-gray-800 flex items-center gap-3 animate-in fade-in slide-in-from-top duration-300">
+                    <Clock className="w-4 h-4 text-blue-500 shrink-0" />
+                    <div className="flex-1 overflow-x-auto scrollbar-hide flex gap-3 pb-1">
+                        {pinnedMessages.map((msg: any) => (
+                            <div
+                                key={msg._id}
+                                onClick={() => document.getElementById(msg._id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                className="flex items-center gap-2 bg-white dark:bg-gray-900 px-3 py-1 rounded-full border dark:border-gray-800 text-[11px] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors whitespace-nowrap shadow-sm group"
+                            >
+                                <span className="font-bold text-blue-500">Pin:</span>
+                                <span className="text-gray-600 dark:text-gray-300 truncate max-w-[150px]">{msg.content}</span>
+                                <X
+                                    className="w-3 h-3 text-gray-400 hover:text-red-500 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => { e.stopPropagation(); togglePinMessage({ conversationId, messageId: msg._id }); }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {showSearch && (
                 <div className="px-6 py-2 bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-md border-b dark:border-gray-800 flex items-center gap-3 animate-in slide-in-from-top duration-300 z-10">
                     <div className="flex-1 flex items-center gap-2 bg-gray-100 dark:bg-gray-900 px-3 py-1.5 rounded-xl border dark:border-gray-800 focus-within:border-blue-500/50 transition-all">
@@ -553,12 +585,18 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                 </div>
                                             )}
 
-                                            <div className={`p-3.5 rounded-2xl relative transition-all duration-300 group-hover:shadow-md ${msg.isDeleted
-                                                ? "bg-gray-100 dark:bg-gray-800/50 italic text-gray-500 border border-gray-200 dark:border-gray-700/50 shadow-sm"
+                                            <div className={`p-3.5 rounded-2xl relative transition-all duration-300 group-hover:shadow-lg chat-bubble-shadow ${msg.isDeleted
+                                                ? "bg-gray-100 dark:bg-gray-800/50 italic text-gray-500 border border-gray-200 dark:border-gray-700/50"
                                                 : msg.isMine
-                                                    ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md hover:shadow-blue-500/20"
-                                                    : "bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-blue-200 dark:hover:border-blue-900/30"
+                                                    ? "bg-gradient-to-br from-blue-600 to-indigo-700 text-white hover:from-blue-500 hover:to-indigo-600 shadow-md shadow-blue-500/10"
+                                                    : "bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 text-gray-900 dark:text-gray-100 hover:border-blue-200 dark:hover:border-blue-900"
                                                 } ${msg.isMine ? "rounded-br-sm" : "rounded-bl-sm"} ${msg.replyDetails ? "rounded-t-none" : ""}`}>
+
+                                                {conversation?.pinnedMessageIds?.includes(msg._id) && (
+                                                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white p-1 rounded-full shadow-md z-10 scale-75 animate-in zoom-in duration-300">
+                                                        <Clock className="w-3.5 h-3.5 fill-current" />
+                                                    </div>
+                                                )}
 
                                                 {!msg.isMine && !msg.isDeleted && (
                                                     <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">
@@ -696,6 +734,14 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                                 </button>
                                                             </PopoverTrigger>
                                                             <PopoverContent side="top" className="w-40 p-1 dark:bg-[#1a1a1a] dark:border-gray-800">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="w-full justify-start text-[11px] h-8 gap-2"
+                                                                    onClick={() => togglePinMessage({ conversationId, messageId: msg._id })}
+                                                                >
+                                                                    <Clock className="w-3.5 h-3.5" /> {conversation?.pinnedMessageIds?.includes(msg._id) ? "Unpin Message" : "Pin Message"}
+                                                                </Button>
                                                                 {msg.isMine && (
                                                                     <>
                                                                         <Button variant="ghost" size="sm" className="w-full justify-start text-xs h-8 gap-2" onClick={() => {
@@ -741,14 +787,14 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                             })
                         )}
                         {typingUsers && typingUsers.length > 0 && (
-                            <div className="flex items-center gap-2 p-2 bg-white/50 dark:bg-black/20 rounded-lg w-fit animate-pulse">
+                            <div className="flex items-center gap-3 ml-2 px-3 py-1.5 bg-gray-100/50 dark:bg-gray-900/50 backdrop-blur-sm rounded-2xl w-fit animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex gap-1">
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                                    <span className="typing-dot" />
+                                    <span className="typing-dot" />
+                                    <span className="typing-dot" />
                                 </div>
-                                <span className="text-xs text-gray-500 font-medium italic">
-                                    {typingUsers.length === 1 ? `${typingUsers[0].name} is typing...` : `${typingUsers.length} users are typing...`}
+                                <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                                    {typingUsers.length === 1 ? `${typingUsers[0].name} is typing` : `${typingUsers.length} people are typing`}
                                 </span>
                             </div>
                         )}
@@ -903,8 +949,26 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                         )}
                     </div>
 
-                    {conversation.isGroup && (
-                        <div className="p-4 space-y-6">
+
+                    <div className="p-4 space-y-6">
+                        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+                            {['members', 'media', 'files'].map((tab) => (
+                                (tab !== 'members' || conversation.isGroup) && (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setInfoTab(tab as any)}
+                                        className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${infoTab === tab
+                                            ? "bg-white dark:bg-gray-700 text-blue-600 shadow-sm"
+                                            : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                            }`}
+                                    >
+                                        {tab}
+                                    </button>
+                                )
+                            ))}
+                        </div>
+
+                        {infoTab === 'members' && conversation.isGroup && (
                             <div>
                                 <div className="flex items-center justify-between mb-4 px-1">
                                     <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -968,7 +1032,55 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                     ))}
                                 </div>
                             </div>
+                        )}
 
+                        {infoTab === 'media' && (
+                            <div className="grid grid-cols-3 gap-2">
+                                {sharedAssets?.media.length === 0 ? (
+                                    <p className="col-span-3 text-center text-xs text-gray-500 py-8">No shared media yet</p>
+                                ) : (
+                                    sharedAssets?.media.map((asset: any) => (
+                                        <div
+                                            key={asset._id}
+                                            className="aspect-square rounded-lg overflow-hidden border dark:border-gray-800 hover:opacity-80 cursor-pointer transition-opacity"
+                                            onClick={() => window.open(asset.fileUrl, "_blank")}
+                                        >
+                                            <img src={asset.fileUrl} className="w-full h-full object-cover" loading="lazy" />
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {infoTab === 'files' && (
+                            <div className="space-y-2">
+                                {sharedAssets?.files.length === 0 ? (
+                                    <p className="text-center text-xs text-gray-500 py-8">No shared files yet</p>
+                                ) : (
+                                    sharedAssets?.files.map((asset: any) => (
+                                        <div key={asset._id} className="flex items-center gap-3 p-3 rounded-xl border dark:border-gray-800 bg-gray-50 dark:bg-white/5 group hover:border-blue-500/50 transition-colors">
+                                            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600">
+                                                <FileIcon className="w-4 h-4" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold truncate dark:text-gray-200">{asset.fileName}</p>
+                                                <p className="text-[10px] text-gray-500">
+                                                    {(asset.fileSize / 1024).toFixed(1)} KB • {format(asset._creationTime, "MMM d")}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => window.open(asset.fileUrl, "_blank")}
+                                                className="p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full"
+                                            >
+                                                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {conversation.isGroup && (
                             <div className="pt-4 border-t dark:border-gray-800">
                                 <Button
                                     variant="ghost"
@@ -983,11 +1095,11 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                     <LogOut className="w-5 h-5" /> Leave Group
                                 </Button>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
+                {/* Audio is created imperatively via useEffect — no JSX tag needed */}
             </div>
-            {/* Audio is created imperatively via useEffect — no JSX tag needed */}
-        </div >
+        </div>
     );
 }

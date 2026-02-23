@@ -168,6 +168,7 @@ export const listConversations = query({
                     memberCount: otherMemberships.length,
                     isMuted: membership.isMuted || false,
                     lastClearedAt: membership.lastClearedAt || 0,
+                    pinnedMessageIds: conversation.pinnedMessageIds || [],
                 };
             })
         );
@@ -433,5 +434,79 @@ export const reportUser = mutation({
             reason: args.reason,
             createdAt: Date.now(),
         });
+    },
+});
+
+/**
+ * Toggle message pinning
+ */
+export const togglePinMessage = mutation({
+    args: {
+        conversationId: v.id("conversations"),
+        messageId: v.id("messages"),
+    },
+    handler: async (ctx, args) => {
+        const conversation = await ctx.db.get(args.conversationId);
+        if (!conversation) throw new Error("Conversation not found");
+
+        const pins = conversation.pinnedMessageIds || [];
+        const isPinned = pins.includes(args.messageId);
+
+        if (isPinned) {
+            await ctx.db.patch(args.conversationId, {
+                pinnedMessageIds: pins.filter(id => id !== args.messageId),
+            });
+        } else {
+            await ctx.db.patch(args.conversationId, {
+                pinnedMessageIds: [...pins, args.messageId],
+            });
+        }
+        return !isPinned;
+    },
+});
+
+/**
+ * Get pinned messages for a conversation
+ */
+export const getPinnedMessages = query({
+    args: { conversationId: v.id("conversations") },
+    handler: async (ctx, args) => {
+        const conversation = await ctx.db.get(args.conversationId);
+        if (!conversation || !conversation.pinnedMessageIds) return [];
+
+        const messages = await Promise.all(
+            conversation.pinnedMessageIds.map(id => ctx.db.get(id))
+        );
+
+        return messages.filter(m => m !== null && !m.isDeleted);
+    },
+});
+
+/**
+ * Get shared assets (media/files)
+ */
+export const getSharedAssets = query({
+    args: { conversationId: v.id("conversations") },
+    handler: async (ctx, args) => {
+        const messages = await ctx.db
+            .query("messages")
+            .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+            .collect();
+
+        const assets = messages
+            .filter(m => !m.isDeleted && m.fileUrl)
+            .map(m => ({
+                _id: m._id,
+                _creationTime: m._creationTime,
+                fileUrl: m.fileUrl,
+                fileName: m.fileName,
+                fileSize: m.fileSize,
+                fileType: m.fileType,
+            }));
+
+        return {
+            media: assets.filter(a => a.fileType === "image"),
+            files: assets.filter(a => a.fileType === "file"),
+        };
     },
 });
