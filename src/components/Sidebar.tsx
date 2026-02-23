@@ -11,8 +11,9 @@ import { ThemeToggle } from "./ThemeToggle";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { Id } from "../../convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Hash, BellOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hash, BellOff, Search, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface SidebarProps {
     onSelectConversation: (id: Id<"conversations">) => void;
@@ -30,11 +31,18 @@ export function Sidebar({ onSelectConversation, selectedId }: SidebarProps) {
         return false;
     });
 
+    const [searchQuery, setSearchQuery] = useState("");
+
     const toggleCollapse = () => {
         const next = !isCollapsed;
         setIsCollapsed(next);
         localStorage.setItem("sidebarCollapsed", String(next));
     };
+
+    const filteredConversations = (conversations || []).filter((c) => {
+        if (!searchQuery.trim()) return true;
+        return (c.name || "").toLowerCase().includes(searchQuery.trim().toLowerCase());
+    });
 
     const formatMessageTime = (time: number) => {
         const d = new Date(time);
@@ -76,7 +84,32 @@ export function Sidebar({ onSelectConversation, selectedId }: SidebarProps) {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            {!isCollapsed && (
+                <div className="px-4 py-3 border-b dark:border-gray-800 sticky top-0 z-20 bg-white/70 dark:bg-[#111]/70 backdrop-blur-md transition-all">
+                    <div className="relative group">
+                        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${searchQuery ? "text-blue-500" : "text-gray-400 group-focus-within:text-blue-500"}`} />
+                        <Input
+                            placeholder="Search contacts or groups..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') setSearchQuery("");
+                            }}
+                            className="bg-gray-100/50 dark:bg-gray-900/50 border-none pl-9 pr-9 h-10 rounded-xl text-sm focus-visible:ring-1 focus-visible:ring-blue-500/50 placeholder:text-gray-500 dark:text-gray-100 transition-all shadow-inner"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-all"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {conversations === undefined ? (
                     <div className="p-4 space-y-4">
                         {[1, 2, 3].map((i) => (
@@ -89,13 +122,27 @@ export function Sidebar({ onSelectConversation, selectedId }: SidebarProps) {
                             </div>
                         ))}
                     </div>
-                ) : conversations.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                        <p>No conversations yet.</p>
-                        <p className="text-sm mt-1">Start a new chat to begin!</p>
+                ) : filteredConversations.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center h-full animate-in fade-in duration-500">
+                        <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-4">
+                            <Search className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="font-bold dark:text-gray-200">No results found</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {searchQuery ? `No chats matching "${searchQuery}"` : "Start a new chat to begin!"}
+                        </p>
+                        {searchQuery && (
+                            <Button
+                                variant="link"
+                                onClick={() => setSearchQuery("")}
+                                className="mt-2 text-blue-500 h-auto p-0"
+                            >
+                                Clear search
+                            </Button>
+                        )}
                     </div>
                 ) : (
-                    conversations.map((c) => (
+                    filteredConversations.map((c) => (
                         <button
                             key={c.id}
                             onClick={() => onSelectConversation(c.id)}
