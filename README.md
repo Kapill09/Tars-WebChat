@@ -1,4 +1,4 @@
-# Tars Web Chat
+<img width="1326" height="683" alt="image" src="https://github.com/user-attachments/assets/bf211603-e61a-4ef3-a8ac-1f0f8265b46d" /># Tars Web Chat
 
 A modern, production-ready real-time chat web application built with Next.js 14+ (App Router), Convex, Clerk, and Tailwind CSS.
 
@@ -63,3 +63,7 @@ Navigate to `http://localhost:3000` to preview the app.
 4. Ensure all environment variables listed in `.env.local` are copied over to Vercel Environment Variables.
 5. Provide your *Production Convex Deployment URL* to your Production Vercel App environment.
 6. Deploy!
+
+
+## Vercel Link
+https://tars-webchat.vercel.app
