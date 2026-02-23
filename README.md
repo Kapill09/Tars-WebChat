@@ -1,4 +1,4 @@
-<img width="1326" height="683" alt="image" src="https://github.com/user-attachments/assets/bf211603-e61a-4ef3-a8ac-1f0f8265b46d" /># Tars Web Chat
+# Tars Web Chat
 
 A modern, production-ready real-time chat web application built with Next.js 14+ (App Router), Convex, Clerk, and Tailwind CSS.
 
