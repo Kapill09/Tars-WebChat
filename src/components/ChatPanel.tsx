@@ -559,6 +559,18 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                     );
                                 };
 
+                                if (msg.isSystem) {
+                                    return (
+                                        <div key={msg._id} className="flex justify-center my-2 animate-in fade-in zoom-in duration-300">
+                                            <div className="bg-gray-100 dark:bg-gray-800/50 px-3 py-1 rounded-full border dark:border-gray-700/50 shadow-sm">
+                                                <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-center">
+                                                    {msg.content}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
                                 return (
                                     <div
                                         key={msg._id}

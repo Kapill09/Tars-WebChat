@@ -42,6 +42,7 @@ export const getMessages = query({
         // 2. Filter by hiddenFor
         // 3. Hide messages from blocked users
         const filteredMessages = messages.filter(m =>
+            m._creationTime >= membership._creationTime &&
             m._creationTime > lastClearedAt &&
             !(m.hiddenFor || []).includes(currentUser._id) &&
             !blockedUserIds.has(m.senderId)
@@ -234,7 +235,9 @@ export const markAsRead = mutation({
             )
             .unique();
 
-        if (membership && (membership.hasUnread || (membership.unreadCount || 0) > 0)) {
+        if (!membership) return;
+
+        if (membership.hasUnread || (membership.unreadCount || 0) > 0) {
             await ctx.db.patch(membership._id, {
                 hasUnread: false,
                 unreadCount: 0,
@@ -242,13 +245,15 @@ export const markAsRead = mutation({
             });
         }
 
-        // 2. Mark all messages in this conversation as seen by this user
+        // 2. Mark all visible messages in this conversation as seen by this user
         const messages = await ctx.db
             .query("messages")
             .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
             .collect();
 
-        for (const msg of messages) {
+        const visibleMessages = messages.filter(m => m._creationTime >= membership._creationTime);
+
+        for (const msg of visibleMessages) {
             const seenBy = msg.seenBy || [];
             const deliveredTo = msg.deliveredTo || [];
 
@@ -278,12 +283,22 @@ export const markAsDelivered = mutation({
             .unique();
         if (!currentUser) return;
 
+        const membership = await ctx.db
+            .query("conversationMembers")
+            .withIndex("by_conversationId_and_userId", (q) =>
+                q.eq("conversationId", args.conversationId).eq("userId", currentUser._id)
+            )
+            .unique();
+        if (!membership) return;
+
         const messages = await ctx.db
             .query("messages")
             .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
             .collect();
 
-        for (const msg of messages) {
+        const visibleMessages = messages.filter(m => m._creationTime >= membership._creationTime);
+
+        for (const msg of visibleMessages) {
             const deliveredTo = msg.deliveredTo || [];
             if (!deliveredTo.includes(currentUser._id)) {
                 await ctx.db.patch(msg._id, {

@@ -97,6 +97,24 @@ export const createGroup = mutation({
                 unreadCount: 0,
                 lastRead: Date.now(),
             });
+
+            const user = await ctx.db.get(userId);
+            if (user) {
+                const messageId = await ctx.db.insert("messages", {
+                    conversationId,
+                    senderId: currentUser._id,
+                    content: `${user.name} joined the group`,
+                    isSystem: true,
+                    isDeleted: false,
+                    seenBy: [currentUser._id],
+                    deliveredTo: [currentUser._id],
+                });
+
+                await ctx.db.patch(conversationId, {
+                    lastMessageId: messageId,
+                    lastMessageTime: Date.now(),
+                });
+            }
         }
 
         return conversationId;
@@ -152,7 +170,10 @@ export const listConversations = query({
 
                 let lastMessage: any = null;
                 if (conversation.lastMessageId) {
-                    lastMessage = await ctx.db.get(conversation.lastMessageId);
+                    const msg = await ctx.db.get(conversation.lastMessageId);
+                    if (msg && msg._creationTime >= membership._creationTime) {
+                        lastMessage = msg;
+                    }
                 }
 
                 return {
@@ -238,6 +259,29 @@ export const addMembers = mutation({
                     unreadCount: 0,
                     lastRead: Date.now(),
                 });
+
+                const user = await ctx.db.get(userId);
+                const currentUser = await ctx.db
+                    .query("users")
+                    .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+                    .unique();
+
+                if (user && currentUser) {
+                    const messageId = await ctx.db.insert("messages", {
+                        conversationId: args.conversationId,
+                        senderId: currentUser._id,
+                        content: `${user.name} joined the group`,
+                        isSystem: true,
+                        isDeleted: false,
+                        seenBy: [currentUser._id],
+                        deliveredTo: [currentUser._id],
+                    });
+
+                    await ctx.db.patch(args.conversationId, {
+                        lastMessageId: messageId,
+                        lastMessageTime: Date.now(),
+                    });
+                }
             }
         }
     },
@@ -271,6 +315,29 @@ export const addMember = mutation({
             unreadCount: 0,
             lastRead: Date.now(),
         });
+
+        const user = await ctx.db.get(args.userId);
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (user && currentUser) {
+            const messageId = await ctx.db.insert("messages", {
+                conversationId: args.conversationId,
+                senderId: currentUser._id,
+                content: `${user.name} joined the group`,
+                isSystem: true,
+                isDeleted: false,
+                seenBy: [currentUser._id],
+                deliveredTo: [currentUser._id],
+            });
+
+            await ctx.db.patch(args.conversationId, {
+                lastMessageId: messageId,
+                lastMessageTime: Date.now(),
+            });
+        }
     },
 });
 
@@ -526,6 +593,7 @@ export const getSharedAssets = query({
                 .filter(m =>
                     !m.isDeleted &&
                     (m.fileUrl || m.fileStorageId) &&
+                    m._creationTime >= membership._creationTime &&
                     m._creationTime > lastClearedAt &&
                     !(m.hiddenFor || []).includes(currentUser._id) &&
                     !blockedUserIds.has(m.senderId)

@@ -52,6 +52,7 @@ export default defineSchema({
         seenBy: v.optional(v.array(v.id("users"))),
         deliveredTo: v.optional(v.array(v.id("users"))),
         hiddenFor: v.optional(v.array(v.id("users"))),
+        isSystem: v.optional(v.boolean()),
     }).index("by_conversationId", ["conversationId"]),
 
     reactions: defineTable({
