@@ -488,25 +488,68 @@ export const getPinnedMessages = query({
 export const getSharedAssets = query({
     args: { conversationId: v.id("conversations") },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return { media: [], files: [] };
+
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        if (!currentUser) return { media: [], files: [] };
+
+        const membership = await ctx.db
+            .query("conversationMembers")
+            .withIndex("by_conversationId_and_userId", (q) =>
+                q.eq("conversationId", args.conversationId).eq("userId", currentUser._id)
+            )
+            .unique();
+
+        if (!membership) return { media: [], files: [] };
+
+        const lastClearedAt = membership.lastClearedAt || 0;
+
+        // Fetch blocked users by current user
+        const blockedRecords = await ctx.db
+            .query("blockedUsers")
+            .withIndex("by_blockerId", (q) => q.eq("blockerId", currentUser._id))
+            .collect();
+        const blockedUserIds = new Set(blockedRecords.map(b => b.blockedId));
+
         const messages = await ctx.db
             .query("messages")
             .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
             .collect();
 
-        const assets = messages
-            .filter(m => !m.isDeleted && m.fileUrl)
-            .map(m => ({
-                _id: m._id,
-                _creationTime: m._creationTime,
-                fileUrl: m.fileUrl,
-                fileName: m.fileName,
-                fileSize: m.fileSize,
-                fileType: m.fileType,
-            }));
+        const assets = await Promise.all(
+            messages
+                .filter(m =>
+                    !m.isDeleted &&
+                    (m.fileUrl || m.fileStorageId) &&
+                    m._creationTime > lastClearedAt &&
+                    !(m.hiddenFor || []).includes(currentUser._id) &&
+                    !blockedUserIds.has(m.senderId)
+                )
+                .map(async (m) => {
+                    let fileUrl = m.fileUrl;
+                    if (!fileUrl && m.fileStorageId) {
+                        fileUrl = (await ctx.storage.getUrl(m.fileStorageId)) || undefined;
+                    }
+
+                    return {
+                        _id: m._id,
+                        _creationTime: m._creationTime,
+                        fileUrl: fileUrl,
+                        fileName: m.fileName,
+                        fileSize: m.fileSize,
+                        fileType: m.fileType,
+                    };
+                })
+        );
 
         return {
-            media: assets.filter(a => a.fileType === "image"),
-            files: assets.filter(a => a.fileType === "file"),
+            media: assets.filter(a => a.fileType === "image" && a.fileUrl),
+            files: assets.filter(a => (a.fileType === "file" || a.fileType === "voice") && a.fileUrl),
         };
     },
 });

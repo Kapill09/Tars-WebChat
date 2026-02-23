@@ -6,7 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Trash2, Smile, Reply, X, Users, MoreVertical, List, UserPlus, LogOut, Settings2, ShieldCheck, Clock, Paperclip, Mic, StopCircle, Play, Pause, FileIcon, Check, CheckCheck, Pencil, UserMinus, Globe, Search, User, Bell, Ban, Flag, BellOff } from "lucide-react";
+import { ArrowLeft, Send, Trash2, Smile, Reply, X, Users, MoreVertical, List, UserPlus, LogOut, Settings2, ShieldCheck, Clock, Paperclip, Mic, StopCircle, Play, Pause, FileIcon, Check, CheckCheck, Pencil, UserMinus, Globe, Search, User, Bell, Ban, Flag, BellOff, Download } from "lucide-react";
 import { format, formatDistanceToNow, isToday } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -1036,10 +1036,14 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
 
                         {infoTab === 'media' && (
                             <div className="grid grid-cols-3 gap-2">
-                                {sharedAssets?.media.length === 0 ? (
+                                {!sharedAssets ? (
+                                    <div className="col-span-3 flex justify-center py-8">
+                                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : sharedAssets.media.length === 0 ? (
                                     <p className="col-span-3 text-center text-xs text-gray-500 py-8">No shared media yet</p>
                                 ) : (
-                                    sharedAssets?.media.map((asset: any) => (
+                                    sharedAssets.media.map((asset: any) => (
                                         <div
                                             key={asset._id}
                                             className="aspect-square rounded-lg overflow-hidden border dark:border-gray-800 hover:opacity-80 cursor-pointer transition-opacity"
@@ -1054,10 +1058,14 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
 
                         {infoTab === 'files' && (
                             <div className="space-y-2">
-                                {sharedAssets?.files.length === 0 ? (
+                                {!sharedAssets ? (
+                                    <div className="flex justify-center py-8">
+                                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : sharedAssets.files.length === 0 ? (
                                     <p className="text-center text-xs text-gray-500 py-8">No shared files yet</p>
                                 ) : (
-                                    sharedAssets?.files.map((asset: any) => (
+                                    sharedAssets.files.map((asset: any) => (
                                         <div key={asset._id} className="flex items-center gap-3 p-3 rounded-xl border dark:border-gray-800 bg-gray-50 dark:bg-white/5 group hover:border-blue-500/50 transition-colors">
                                             <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600">
                                                 <FileIcon className="w-4 h-4" />
@@ -1069,10 +1077,17 @@ export function ChatPanel({ conversationId, onBack }: ChatPanelProps) {
                                                 </p>
                                             </div>
                                             <button
-                                                onClick={() => window.open(asset.fileUrl, "_blank")}
+                                                onClick={() => {
+                                                    const link = document.createElement('a');
+                                                    link.href = asset.fileUrl;
+                                                    link.download = asset.fileName;
+                                                    link.target = "_blank";
+                                                    link.click();
+                                                }}
                                                 className="p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full"
+                                                title="Download"
                                             >
-                                                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                                                <Download className="w-3.5 h-3.5 text-blue-500" />
                                             </button>
                                         </div>
                                     ))
